@@ -1,4 +1,30 @@
 # Databricks notebook source
+# MAGIC %md
+# MAGIC # Pipeline logic
+# MAGIC 1. take experiment from input table
+# MAGIC 2. check which experiments needs update/initial process
+# MAGIC 3. проверяем есть ли у нас актуальная схема ( отсортировать словарь указанной схемы, в строку, хэш записать как версию )
+# MAGIC Актуализируем при необходимости
+# MAGIC 4. параллельно с актуализацией словаря грузим файлы 
+# MAGIC 5. файлы перегоняем в json
+# MAGIC 6. со словарем и файлами в json приводим файлы к заданной схеме
+# MAGIC 7. проверки на обязательные поля, лог отбракованных данных
+# MAGIC 8. проверки на типы и загоняем данные в Сильвер слой, лог отбракованных данных
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select * from pdb_pipeline.bronze_entity limit 100;
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC create table pdb_pipeline.raw_data 
+# MAGIC using json
+# MAGIC location 'file:/Workspace/Users/nikita.ivanov@quantori.com/pdb_pipeline_2/raw_data';
+
+# COMMAND ----------
+
 # MAGIC %sql
 # MAGIC drop table if exists raw_data;
 # MAGIC create table raw_data 
@@ -38,6 +64,7 @@
 
 import requests as r
 import gzip as g
+from pdbecif.mmcif_tools import MMCIF2Dict
 
 experiment_name = '100d'
 
@@ -52,7 +79,6 @@ etag = resp.headers['ETag']
 import os
 import json
 
-cwd = os.getcwd()
 pipe_path = '/Workspace/Users/nikita.ivanov@quantori.com/pdb_pipeline_1/'
 cif_path = pipe_path + 'cif/'
 cif_file_path = cif_path + experiment_name + '.cif'
@@ -71,7 +97,24 @@ with open(pipe_path + 'raw_data/' + experiment_name + '.json', 'w') as fp:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ###Lets try to get dict data from website...
+# MAGIC #Lets try to get dict data from website...
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC create table if not exists required_categories_and_attributes (category string, attribute string);
+# MAGIC insert into required_categories_and_attributes values 
+# MAGIC   ('entity', '*'), 
+# MAGIC   ('pdbx_database_PDB_obs_spr', '*'),
+# MAGIC   ('entity_poly_seq', '*'),
+# MAGIC   ('chem_comp', '*'),
+# MAGIC   ('exptl', 'entry_id'),
+# MAGIC   ('exptl', 'method');
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ##1. Get schema
 
 # COMMAND ----------
 
@@ -81,16 +124,18 @@ from pprint import pprint
 import requests as r
 import json
 
-categories = ['entity', 'pdbx_database_PDB_obs_spr', 'entity_poly_seq', 'chem_comp']
-attributes = ['exptl.entry_id', 'exptl.method']
+required_full_categories = [ row['category'] for row in spark.sql("select category from required_categories_and_attributes where attribute = '*' ").rdd.collect()]
 
 categories_site = 'https://mmcif.wwpdb.org/dictionaries/mmcif_pdbx_v50.dic/Categories/'
+items_site = 'https://mmcif.wwpdb.org/dictionaries/mmcif_pdbx_v50.dic/Items/_'
 link_prefix = 'https://mmcif.wwpdb.org'
 
-
+schema_carcass = {}
 categories_dict = {}
-for category in categories:
+
+for category in required_full_categories:
     category_attributes = []
+    category_attributes_dict = {}
     page = r.get(categories_site + category + '.html')
     bs = bs4.BeautifulSoup(page.text, 'lxml')
 
@@ -107,19 +152,181 @@ for category in categories:
                     pass
                 href_itself = href.__dict__['attrs']['href']
                 href_text = href.getText()
-                category_attributes.append((link_prefix + href_itself,href_text))
+                #category_attributes.append((link_prefix + href_itself,href_text))
+                category_attributes.append({'attribute_name': href_text.split('.')[1], 'link':link_prefix + href_itself })
+                category_attributes_dict[href_text.split('.')[1]] = []
+    schema_carcass[category] = category_attributes_dict
     categories_dict[category] = category_attributes
 
-pprint(categories_dict)
+pprint(schema_carcass)
+specified_attributes = [ (row['category'], row['attribute']) for row in spark.sql("select * from required_categories_and_attributes where not attribute = '*' ").rdd.collect()]
 
-with open('/Workspace/Users/nikita.ivanov@quantori.com/pdb_pipeline_1/PDB_dict/schema.json', 'w') as fp:
-    json.dump(categories_dict, fp)
+for (specified_category, specified_attribute) in specified_attributes:
+    cat_dot_attr = '_' + specified_category + '.' + specified_attribute
+    categories_dict[specified_category] = {'attribute_name': specified_attribute, 'link':items_site + cat_dot_attr + '.html' }
+
+    if specified_category in schema_carcass:
+        schema_carcass[specified_category].update({specified_attribute:[]})
+    else:
+        schema_carcass[specified_category] = {specified_attribute:[]}
+
+#pprint(categories_dict)
+
+with open('/Workspace/Users/nikita.ivanov@quantori.com/pdb_pipeline_1/PDB_dict/full_schema_dict.json', 'w') as file:
+    json.dump(categories_dict, file)
+
+with open('/Workspace/Users/nikita.ivanov@quantori.com/pdb_pipeline_1/PDB_dict/schema_carcass.json', 'w') as file:
+    json.dump(schema_carcass, file)
 
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Futile attempt to parse PDB dictionary to get data schema 
+# MAGIC ##2. Merge existing data into defined schema
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ###2.1 TODO get only new files
+# MAGIC looks like it doesn't like the path
+
+# COMMAND ----------
+
+df = spark.readStream.format('cloudFiles') \
+    .option('cloudFiles.format', 'json') \
+    .option('cloudFiles.schemaLocation', '/Workspace/Users/nikita.ivanov@quantori.com/pdb_pipeline_1/raw_data_stream_schema') \
+    .option('cloudFiles.inferColumnTypes', 'true') \
+    .load('file:/Workspace/Users/nikita.ivanov@quantori.com/pdb_pipeline_1/raw_data')
+
+display(df)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ###2.2 Merge file schema
+# MAGIC we need to actually create table for each category from configuration
+# MAGIC so, dynamic table creation from python
+# MAGIC
+# MAGIC or maybe put it together for the first iteration by hand ?
+
+# COMMAND ----------
+
+from pprint import pprint
+import json
+import os
+from copy import deepcopy
+
+# this will be auto loader result
+new_files = ['100D.json']
+
+pipeline_path = '/Workspace/Users/nikita.ivanov@quantori.com/pdb_pipeline_1/'
+new_files_path = pipeline_path + 'raw_data/'
+
+with open(pipeline_path + 'PDB_dict/full_schema_dict.json', 'r') as file:
+  full_schema = json.load(file)
+
+with open(pipeline_path + 'PDB_dict/schema_carcass.json', 'r') as file:
+  schema_carcass = json.load(file)
+
+folders = os.listdir(pipeline_path + 'bronze')
+
+# create missing folders
+for category in full_schema:
+  if not category in folders:
+    os.mkdir(pipeline_path + 'bronze/' + category)
+
+
+for new_file_name in new_files:  
+  file_path = new_files_path + new_file_name
+  with open(file_path, 'r') as file:
+    new_file = json.load(file)
+
+  # key-value pairs -> keys list
+  # also trim underscore in the beginnig of category name
+  new_file_uniformed = {}
+  for category_name, category in new_file['data'].items():
+      new_category = {}
+      for attribute_name, attribute in category.items():
+          if type(attribute).__name__ == 'str':
+            new_category[attribute_name] = [attribute]
+          elif type(attribute).__name__ == 'list':
+            new_category[attribute_name] = attribute
+          else:
+            print('wtf?', type(attribute))
+
+      if category_name[0] == '_':
+        category_name_normalized = category_name[1:]
+      else:
+        category_name_normalized = category_name
+
+      new_file_uniformed[category_name_normalized] = new_category
+
+
+  new_file_refined = deepcopy(new_file_uniformed)
+  # remove data which is not in target schema
+  for category in new_file_uniformed:
+    if not category in schema_carcass:
+      #print('category missing ',category)
+      new_file_refined.pop(category)
+    else:
+      for attribute in new_file_uniformed[category]:
+        if not attribute in schema_carcass[category]:
+          new_file_refined[category].pop(attribute)
+  
+
+  # enrich files with missing categories
+  schema_enforced_file = schema_carcass | new_file_refined
+  # fill existing categories with missing attributes
+  for category in schema_carcass:
+    schema_enforced_file[category] = schema_carcass[category] | schema_enforced_file[category]
+  
+  # write 
+  for category_name, category in schema_enforced_file.items():
+    with open(pipeline_path + 'bronze/' + category_name + '/' + new_file_name, 'w') as file:
+      json.dump(schema_enforced_file[category_name],file)
+
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### We have written our file with proper schema, but there is arrays in columns, and we have to make it a table
+
+# COMMAND ----------
+
+import pandas as pd
+
+df = pd.DataFrame( {'id': ['1', '2', '3'], 'type': ['polymer', 'non-polymer', 'water'], 'src_method': ['syn', 'syn', 'nat'], 'pdbx_description': ["DNA/RNA (5'-R(*CP*)-D(*CP*GP*GP*CP*GP*CP*CP*GP*)-R(*G)-3')", 'SPERMINE', 'water'], 'formula_weight': ['3078.980', '202.340', '18.015'], 'pdbx_number_of_molecules': ['2', '1', '67'], 'pdbx_ec': ['?', '?', '?'], 'pdbx_mutation': ['?', '?', '?'], 'pdbx_fragment': ['?', '?', '?'], 'details': ['?', '?', '?']})
+display(df)
+
+#Create PySpark DataFrame from Pandas
+sparkDF=spark.createDataFrame(df) 
+sparkDF.printSchema()
+sparkDF.show()
+
+
+
+# COMMAND ----------
+
+df = spark.sql("select * from json.`file:/Workspace/Users/nikita.ivanov@quantori.com/pdb_pipeline_1/bronze/entity` ")
+display(df)
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC drop table if exists bronze_entity;
+# MAGIC create table bronze_entity
+# MAGIC using json
+# MAGIC location 'file:/Workspace/Users/nikita.ivanov@quantori.com/pdb_pipeline_1/bronze/entity';
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select * from bronze_entity;
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC # Futile attempt to parse PDB dictionary to get data schema 
 
 # COMMAND ----------
 
@@ -239,7 +446,7 @@ for i in range(max_length):
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ###Old code, we want to enrich and validate data from dictionary
+# MAGIC #Old code, we want to enrich and validate data from dictionary
 
 # COMMAND ----------
 
@@ -278,11 +485,11 @@ our_stuff = {}
 for key in list(cif_dict[experiment_name].keys()):
     if key in our_keys:
         #print(key, ' found')
-        a = cif_dict[experiment_name][key]
+        category = cif_dict[experiment_name][key]
         if key == '_entity':
-            a = full_entity | a
-            print(a)
-        our_stuff.update({key:a})
+            category = full_entity | category
+            print(category)
+        our_stuff.update({key:category})
 
 print('our_stuff',our_stuff)
 our_stuff.update({'etag':etag, 'experiment_id':list(cif_dict.keys())[0]})
@@ -312,7 +519,7 @@ with open('/Workspace/Users/nikita.ivanov@quantori.com' + '/pdbs/raw_data/' + ex
 
 # MAGIC %sql
 # MAGIC
-# MAGIC create table if not exists bronze_entity
+# MAGIC create or replace table pdb_pipeline.bronze_entity
 # MAGIC (
 # MAGIC   experiment string,
 # MAGIC   id string,
@@ -332,8 +539,16 @@ with open('/Workspace/Users/nikita.ivanov@quantori.com' + '/pdbs/raw_data/' + ex
 # MAGIC   src_method string,
 # MAGIC   type string
 # MAGIC )
-# MAGIC using delta
-# MAGIC location 'file:/Workspace/Users/nikita.ivanov@quantori.com/pdbs/bronze/entity';
+# MAGIC using delta;
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select * from pdb_pipeline.bronze_entity limit 20;
+
+# COMMAND ----------
+
+# MAGIC %sql
 # MAGIC
 # MAGIC truncate table bronze_entity;
 # MAGIC insert into bronze_entity by name

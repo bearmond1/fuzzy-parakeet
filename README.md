@@ -5,9 +5,11 @@ This is a data engineering project, which retieves and processes data from [Worl
 Largest unit of data is experiment, represented by code of 4 symbols, like '100D'. Data presented in mmCIF (Macromolecular Crystallographic Information File) format. Each experiment contains number of categories, each category is either set of key-value pairs or a table of values. In mmCIF format list of keys precedes actual values, like so:
 
 Key : value category:
+
 ![Key : value category](/screenshots/key_value_cat.png) 
 
 Table category:
+
 ![Table category](/screenshots/table_cat.png)
 
 For parsing CIF data we`re using [PDBeCIF parser](https://pdbeurope.github.io/pdbecif/index.html#). It provides us with easy convertion CIF -> json. 

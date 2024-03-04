@@ -61,3 +61,4 @@ for experiment in new_experiments:
     experiments_to_process.append((experiment,etag))
 
 dbutils.jobs.taskValues.set(key = "experimints", value = experiments_to_process)
+spark.sql('truncate table pdb_pipeline.pipeline_input')

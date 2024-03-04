@@ -13,6 +13,25 @@
 
 # COMMAND ----------
 
+
+entities_to_process = spark.sql("select experiment from pdb_pipeline.current_run_categories  ").toPandas()
+entities = [ row['experiment'] for index,row in entities_to_process.iterrows()]
+print(entities)
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC
+# MAGIC create table if not exists pdb_pipeline.current_run_categories (
+# MAGIC   category string,
+# MAGIC   experiment string
+# MAGIC )
+# MAGIC using delta;
+# MAGIC
+# MAGIC insert into pdb_pipeline.current_run_categories values ('category', 'experiment'), ('category1', 'experiment1');
+
+# COMMAND ----------
+
 # MAGIC %sql
 # MAGIC select * from pdb_pipeline.bronze_entity limit 100;
 

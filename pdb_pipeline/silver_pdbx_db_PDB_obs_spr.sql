@@ -29,7 +29,7 @@ when not matched then insert *
 
 -- COMMAND ----------
 
-merge into pdb_pipeline.silver_pdbx_database_PDB_obs_spr
+merge into pdb_pipeline.rejected_pdbx_database_PDB_obs_spr
 using (
 select
   experiment ,
@@ -51,9 +51,9 @@ where
   )
 ) as source
 on 
-pdb_pipeline.silver_pdbx_database_PDB_obs_spr.experiment = source.experiment and
-pdb_pipeline.silver_pdbx_database_PDB_obs_spr.pdb_id = source.pdb_id and
-pdb_pipeline.silver_pdbx_database_PDB_obs_spr.replace_pdb_id = source.replace_pdb_id
+pdb_pipeline.rejected_pdbx_database_PDB_obs_spr.experiment = source.experiment and
+pdb_pipeline.rejected_pdbx_database_PDB_obs_spr.pdb_id = source.pdb_id and
+pdb_pipeline.rejected_pdbx_database_PDB_obs_spr.replace_pdb_id = source.replace_pdb_id
 
 when matched then update set *
 when not matched then insert *

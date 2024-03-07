@@ -14,6 +14,13 @@
 # COMMAND ----------
 
 # MAGIC %sql
+# MAGIC select *
+# MAGIC from json.`file:/Workspace/Users/nikita.ivanov@quantori.com/pdb_pipeline_2/bronze/entity/1EMA.json`
+# MAGIC limit 100;
+
+# COMMAND ----------
+
+# MAGIC %sql
 # MAGIC truncate table pdb_pipeline.bronze_entity_poly_seq;
 # MAGIC truncate table pdb_pipeline.rejected_entity_poly_seq;
 # MAGIC truncate table pdb_pipeline.silver_entity_poly_seq;

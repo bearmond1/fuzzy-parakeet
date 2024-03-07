@@ -20,16 +20,16 @@ with open(schema_carcass_path, 'r') as file:
   schema_carcass = json.load(file)
 
 for (experiment,etag) in experiments_to_process:
-    #spark.sql(f'insert into pdb_pipeline.pipeline_input (experiment) values ("{experiment}")')
     cif_file_path = cif_path + experiment + '.cif'
     experiment_dict = MMCIF2Dict().parse(cif_file_path)
     experiment_name = list(experiment_dict.keys())[0]
     output_dict = {'data':experiment_dict[experiment_name], 'etag':etag}
 
+    # write json representation with version added
     with open(pipe_path + 'raw_data/' + experiment + '.json', 'w') as file:
         json.dump(output_dict, file)
 
-    # trim underscore
+    # trim underscore in category names
     new_file_uniformed = {}
     for category_name, category in experiment_dict[experiment_name].items():
         if category_name[0] == '_':
@@ -48,10 +48,11 @@ for (experiment,etag) in experiments_to_process:
             for attribute in new_file_uniformed[category]:
                 if not attribute in schema_carcass[category]:
                     new_file_refined[category].pop(attribute)
-
+    
     for category in new_file_refined:
+        # write data which shall be processed further
         values_for_insert = values_for_insert + f"('{category}','{experiment}'),"
-        #spark.sql(f"insert into pdb_pipeline.current_run_categories values ('{category}','{experiment}')")
+        # write json file for each experiment and category 
         with open(f'{pipe_path}bronze/{category}/{experiment}.json', 'w') as file:
             json.dump(new_file_refined[category], file)
 

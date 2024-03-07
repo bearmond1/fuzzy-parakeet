@@ -8,13 +8,13 @@ from pyspark.sql.functions import when, lit, col
 pipe_path = '/Workspace/Users/nikita.ivanov@quantori.com/pdb_pipeline_2/'
 schema_carcass_path = '/Workspace/Users/nikita.ivanov@quantori.com/pdb_pipeline_1/PDB_dict/schema_carcass.json'
 
-category_name = 'entity' # dbutils.widgets.get("category")
+category_name = dbutils.widgets.get("category")
 
 # experiments which has current category
 experiments = spark.sql(f"select experiment from pdb_pipeline.current_run_categories where category = '{category_name}'  ").toPandas()
 experiments_to_process = [ row['experiment'] for index,row in experiments.iterrows()]
 assert experiments_to_process != []
-print(experiments_to_process)
+#print(experiments_to_process)
 
 with open(schema_carcass_path, 'r') as file:
   schema_carcass = json.load(file)
@@ -53,8 +53,6 @@ for experiment in experiments_to_process:
             sparkDF = sparkDF.withColumn(attribute, lit(None).cast(StringType()) )
     sparkDF = sparkDF.withColumn('experiment', lit(experiment).cast(StringType()) )
     sparkDF = sparkDF.select((['experiment'] + fields_list))
-    #sparkDF.write.insertInto(f'pdb_pipeline.bronze_{category_name}', overwrite=False)
-    #display(sparkDF)
     dataframes.append(sparkDF)
     experiments_for_sql = f"{experiments_for_sql}'{experiment}',"
 
@@ -68,13 +66,8 @@ for i,df in enumerate(dataframes):
     if not i == 0:
         bronze_category_dataframe = bronze_category_dataframe.union(df)
 
-display(bronze_category_dataframe)
+#display(bronze_category_dataframe)
 
 spark.sql(f'delete from pdb_pipeline.bronze_{category_name} where (experiment in ({experiments_for_sql}))')
 bronze_category_dataframe.write.insertInto(f'pdb_pipeline.bronze_{category_name}', overwrite=False)
-
-#for attribute in schema_carcass[category_name]:
-    # ideally it would be single statement
-#    stmnt = f" update pdb_pipeline.bronze_{category_name} set {attribute} = Null where (experiment in ({experiments_for_sql}) and {attribute} = '?');"
-#    update_stmnt = update_stmnt + stmnt
 

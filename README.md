@@ -57,5 +57,16 @@ We union all experiments into single dataframe, delete all data about these expe
 
 ## Silver layer
 We have put data in structured representation, now we can make type checks, allowed values checks, not null checks.
+At this point we have to write individual SQL tasks, unfortunately, since we do not have proper mechanisms for merge dataframes into tables.
+
+![silver_layer](/screenshots/silver_layer.png)
+
+Rows that fail check we write in rejected table.
+
+![rejected](/screenshots/rejected.png)
+
+Now we have structured and verified data!
+
+![silver_data](/screenshots/silver_data.png)
 
 

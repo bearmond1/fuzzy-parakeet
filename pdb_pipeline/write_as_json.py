@@ -14,11 +14,13 @@ pipe_path = '/Workspace/Users/nikita.ivanov@quantori.com/pdb_pipeline_2/'
 schema_carcass_path = '/Workspace/Users/nikita.ivanov@quantori.com/pdb_pipeline_1/PDB_dict/schema_carcass.json'
 cif_path = pipe_path + 'cif/'
 
+values_for_insert = ''
+
 with open(schema_carcass_path, 'r') as file:
   schema_carcass = json.load(file)
 
 for (experiment,etag) in experiments_to_process:
-    spark.sql(f'insert into pdb_pipeline.pipeline_input (experiment) values ("{experiment}")')
+    #spark.sql(f'insert into pdb_pipeline.pipeline_input (experiment) values ("{experiment}")')
     cif_file_path = cif_path + experiment + '.cif'
     experiment_dict = MMCIF2Dict().parse(cif_file_path)
     experiment_name = list(experiment_dict.keys())[0]
@@ -48,10 +50,13 @@ for (experiment,etag) in experiments_to_process:
                     new_file_refined[category].pop(attribute)
 
     for category in new_file_refined:
-        spark.sql(f"insert into pdb_pipeline.current_run_categories values ('{category}','{experiment}')")
+        values_for_insert = values_for_insert + f"('{category}','{experiment}'),"
+        #spark.sql(f"insert into pdb_pipeline.current_run_categories values ('{category}','{experiment}')")
         with open(f'{pipe_path}bronze/{category}/{experiment}.json', 'w') as file:
             json.dump(new_file_refined[category], file)
 
+values_for_insert = values_for_insert[:len(values_for_insert)-1]
+spark.sql(f"insert into pdb_pipeline.current_run_categories values {values_for_insert}")
 
 # COMMAND ----------
 

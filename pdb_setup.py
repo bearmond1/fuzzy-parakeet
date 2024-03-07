@@ -13,10 +13,238 @@
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC truncate table pdb_pipeline.bronze_entity_poly_seq;
+# MAGIC truncate table pdb_pipeline.rejected_entity_poly_seq;
+# MAGIC truncate table pdb_pipeline.silver_entity_poly_seq;
+# MAGIC
+# MAGIC truncate table pdb_pipeline.bronze_chem_comp;
+# MAGIC truncate table pdb_pipeline.rejected_chem_comp;
+# MAGIC truncate table pdb_pipeline.silver_chem_comp;
+# MAGIC
+# MAGIC truncate table pdb_pipeline.bronze_exptl;
+# MAGIC truncate table pdb_pipeline.rejected_exptl;
+# MAGIC truncate table pdb_pipeline.silver_exptl;
+# MAGIC
+# MAGIC truncate table pdb_pipeline.bronze_entity;
+# MAGIC truncate table pdb_pipeline.rejected_entity;
+# MAGIC truncate table pdb_pipeline.silver_entity;
+# MAGIC
+# MAGIC truncate table pdb_pipeline.bronze_pdbx_database_pdb_obs_spr;
+# MAGIC truncate table pdb_pipeline.rejected_pdbx_database_pdb_obs_spr;
+# MAGIC truncate table pdb_pipeline.silver_pdbx_database_pdb_obs_spr;
 
-entities_to_process = spark.sql("select experiment from pdb_pipeline.current_run_categories  ").toPandas()
-entities = [ row['experiment'] for index,row in entities_to_process.iterrows()]
-print(entities)
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC create or replace table pdb_pipeline.bronze_entity_poly_seq (
+# MAGIC   experiment string,
+# MAGIC   entity_id string,
+# MAGIC   mon_id string,
+# MAGIC   num string,
+# MAGIC   hetero string
+# MAGIC )
+# MAGIC using delta;
+# MAGIC
+# MAGIC create or replace table pdb_pipeline.rejected_entity_poly_seq (
+# MAGIC   experiment string,
+# MAGIC   entity_id string,
+# MAGIC   mon_id string,
+# MAGIC   num string,
+# MAGIC   hetero string
+# MAGIC )
+# MAGIC using delta;
+# MAGIC
+# MAGIC create or replace table pdb_pipeline.silver_entity_poly_seq (
+# MAGIC   experiment string not null,
+# MAGIC   entity_id string not null,
+# MAGIC   mon_id string not null,
+# MAGIC   num int not null,
+# MAGIC   hetero string -- [n,no,y,yes]
+# MAGIC )
+# MAGIC using delta;
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC create or replace table pdb_pipeline.bronze_chem_comp (
+# MAGIC   experiment string,
+# MAGIC   id string,
+# MAGIC   formula string,
+# MAGIC   formula_weight string,
+# MAGIC   model_details string,
+# MAGIC   model_erf string,
+# MAGIC   model_source string,
+# MAGIC   mon_nstd_class string,
+# MAGIC   mon_nstd_details string,
+# MAGIC   mon_nstd_flag string,
+# MAGIC   mon_nstd_parent string,
+# MAGIC   mon_nstd_parent_comp_id string,
+# MAGIC   name string,
+# MAGIC   number_atoms_all string,
+# MAGIC   number_atoms_nh string,
+# MAGIC   one_letter_code string,
+# MAGIC   pdbx_ambiguous_flag string,
+# MAGIC   pdbx_casnum string,
+# MAGIC   pdbx_class_1 string,
+# MAGIC   pdbx_class_2 string,
+# MAGIC   pdbx_comp_type string,
+# MAGIC   pdbx_component_no string,
+# MAGIC   pdbx_formal_charge string,
+# MAGIC   pdbx_ideal_coordinates_details string,
+# MAGIC   pdbx_ideal_coordinates_missing_flag string,
+# MAGIC   pdbx_initial_date string,
+# MAGIC   pdbx_model_coordinates_db_code string,
+# MAGIC   pdbx_model_coordinates_details string,
+# MAGIC   pdbx_model_coordinates_missing_flag string,
+# MAGIC   pdbx_modification_details string,
+# MAGIC   pdbx_modified_date string,
+# MAGIC   pdbx_nscnum string,
+# MAGIC   pdbx_number_subcomponents string,
+# MAGIC   pdbx_pcm string,
+# MAGIC   pdbx_processing_site string,
+# MAGIC   pdbx_release_status string,
+# MAGIC   pdbx_replaced_by string,
+# MAGIC   pdbx_replaces string,
+# MAGIC   pdbx_reserved_name string,
+# MAGIC   pdbx_smiles string,
+# MAGIC   pdbx_status string,
+# MAGIC   pdbx_subcomponent_list string,
+# MAGIC   pdbx_synonyms string,
+# MAGIC   pdbx_type string,
+# MAGIC   pdbx_type_modified string,
+# MAGIC   three_letter_code string,
+# MAGIC   type string
+# MAGIC )
+# MAGIC using delta;
+# MAGIC
+# MAGIC create or replace table pdb_pipeline.rejected_chem_comp (
+# MAGIC   experiment string,
+# MAGIC   id string,
+# MAGIC   formula string,
+# MAGIC   formula_weight string,
+# MAGIC   model_details string,
+# MAGIC   model_erf string,
+# MAGIC   model_source string,
+# MAGIC   mon_nstd_class string,
+# MAGIC   mon_nstd_details string,
+# MAGIC   mon_nstd_flag string,
+# MAGIC   mon_nstd_parent string,
+# MAGIC   mon_nstd_parent_comp_id string,
+# MAGIC   name string,
+# MAGIC   number_atoms_all string,
+# MAGIC   number_atoms_nh string,
+# MAGIC   one_letter_code string,
+# MAGIC   pdbx_ambiguous_flag string,
+# MAGIC   pdbx_casnum string,
+# MAGIC   pdbx_class_1 string,
+# MAGIC   pdbx_class_2 string,
+# MAGIC   pdbx_comp_type string,
+# MAGIC   pdbx_component_no string,
+# MAGIC   pdbx_formal_charge string,
+# MAGIC   pdbx_ideal_coordinates_details string,
+# MAGIC   pdbx_ideal_coordinates_missing_flag string,
+# MAGIC   pdbx_initial_date string,
+# MAGIC   pdbx_model_coordinates_db_code string,
+# MAGIC   pdbx_model_coordinates_details string,
+# MAGIC   pdbx_model_coordinates_missing_flag string,
+# MAGIC   pdbx_modification_details string,
+# MAGIC   pdbx_modified_date string,
+# MAGIC   pdbx_nscnum string,
+# MAGIC   pdbx_number_subcomponents string,
+# MAGIC   pdbx_pcm string,
+# MAGIC   pdbx_processing_site string,
+# MAGIC   pdbx_release_status string,
+# MAGIC   pdbx_replaced_by string,
+# MAGIC   pdbx_replaces string,
+# MAGIC   pdbx_reserved_name string,
+# MAGIC   pdbx_smiles string,
+# MAGIC   pdbx_status string,
+# MAGIC   pdbx_subcomponent_list string,
+# MAGIC   pdbx_synonyms string,
+# MAGIC   pdbx_type string,
+# MAGIC   pdbx_type_modified string,
+# MAGIC   three_letter_code string,
+# MAGIC   type string
+# MAGIC )
+# MAGIC using delta;
+# MAGIC
+# MAGIC create or replace table pdb_pipeline.silver_chem_comp (
+# MAGIC   experiment string not null,
+# MAGIC   id string not null,
+# MAGIC   formula string,
+# MAGIC   formula_weight float,
+# MAGIC   model_details string,
+# MAGIC   model_erf string,
+# MAGIC   model_source string,
+# MAGIC   mon_nstd_class string,
+# MAGIC   mon_nstd_details string,
+# MAGIC   mon_nstd_flag string, -- n,no,y,yes
+# MAGIC   mon_nstd_parent string,
+# MAGIC   mon_nstd_parent_comp_id string,
+# MAGIC   name string,
+# MAGIC   number_atoms_all int,
+# MAGIC   number_atoms_nh int,
+# MAGIC   one_letter_code string,
+# MAGIC   pdbx_ambiguous_flag string,
+# MAGIC   pdbx_casnum string,
+# MAGIC   pdbx_class_1 string,
+# MAGIC   pdbx_class_2 string,
+# MAGIC   pdbx_comp_type string, -- inorganic ligand, metal cation, organic ligand, organometalic ligand, solvent
+# MAGIC   pdbx_component_no string,
+# MAGIC   pdbx_formal_charge int,
+# MAGIC   pdbx_ideal_coordinates_details string,
+# MAGIC   pdbx_ideal_coordinates_missing_flag string, -- Y,N
+# MAGIC   pdbx_initial_date date,
+# MAGIC   pdbx_model_coordinates_db_code string,
+# MAGIC   pdbx_model_coordinates_details string,
+# MAGIC   pdbx_model_coordinates_missing_flag string, -- Y,N
+# MAGIC   pdbx_modification_details string,
+# MAGIC   pdbx_modified_date date,
+# MAGIC   pdbx_nscnum string,
+# MAGIC   pdbx_number_subcomponents int,
+# MAGIC   pdbx_pcm string, -- Y,N
+# MAGIC   pdbx_processing_site string, -- EBI,PDBC,PDBE,PDBJ,RCSB
+# MAGIC   pdbx_release_status string, -- DEL,HOLD,HPUB,OBS,REF_ONLY,REL
+# MAGIC   pdbx_replaced_by string,
+# MAGIC   pdbx_replaces string,
+# MAGIC   pdbx_reserved_name string,
+# MAGIC   pdbx_smiles string,
+# MAGIC   pdbx_status string,
+# MAGIC   pdbx_subcomponent_list string,
+# MAGIC   pdbx_synonyms string,
+# MAGIC   pdbx_type string,
+# MAGIC   pdbx_type_modified string, -- 0,1
+# MAGIC   three_letter_code string,
+# MAGIC   type string not null, 
+# MAGIC   CONSTRAINT pk PRIMARY KEY(experiment,id)
+# MAGIC )
+# MAGIC using delta;
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC create table pdb_pipeline.bronze_exptl (
+# MAGIC   experiment string,
+# MAGIC   entry_id string,
+# MAGIC   method string
+# MAGIC )
+# MAGIC using delta; 
+# MAGIC
+# MAGIC create table pdb_pipeline.rejected_exptl (
+# MAGIC   experiment string,
+# MAGIC   entry_id string,
+# MAGIC   method string
+# MAGIC )
+# MAGIC using delta; 
+# MAGIC
+# MAGIC create or replace table pdb_pipeline.silver_exptl (
+# MAGIC   experiment string not null,
+# MAGIC   entry_id string not null,
+# MAGIC   method string not null,
+# MAGIC   CONSTRAINT pk PRIMARY KEY(experiment,entry_id,method)
+# MAGIC )
+# MAGIC using delta; 
 
 # COMMAND ----------
 
@@ -33,39 +261,12 @@ print(entities)
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC select * from pdb_pipeline.bronze_entity limit 100;
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC create table pdb_pipeline.raw_data 
-# MAGIC using json
-# MAGIC location 'file:/Workspace/Users/nikita.ivanov@quantori.com/pdb_pipeline_2/raw_data';
-
-# COMMAND ----------
-
-# MAGIC %sql
 # MAGIC drop table if exists raw_data;
 # MAGIC create table raw_data 
 # MAGIC using json
 # MAGIC location 'file:/Workspace/Users/nikita.ivanov@quantori.com/pdb_pipeline_1/raw_data';
 # MAGIC
 # MAGIC select * from raw_data;
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC select data._entity from raw_data;
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC
-# MAGIC select 
-# MAGIC   left( right(input_file_name(), 9), 4) as experiment,
-# MAGIC   etag,
-# MAGIC   data
-# MAGIC from raw_data;
 
 # COMMAND ----------
 

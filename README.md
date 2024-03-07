@@ -4,7 +4,7 @@ This is a data engineering project, which retieves and processes data from [Worl
 # Source data
 Largest unit of data is experiment, represented by code of 4 symbols, like '100D'. Data presented in mmCIF (Macromolecular Crystallographic Information File) format. Each experiment contains number of categories, each category is either set of key-value pairs or a table of values. In mmCIF format list of keys precedes actual values, like so:
 
-Key : value category:
+Key - value category:
 
 ![Key : value category](/screenshots/key_value_cat.png) 
 
@@ -25,3 +25,37 @@ For parsing CIF data we`re using [PDBeCIF parser](https://pdbeurope.github.io/pd
 8) We arrived at place where data came to structured view, we shouldn't have lost any data by this point. Now it's time to clean data. PDBx/mmCIF dictionary provides us with information about attributes like it's data type, list of allowed values, if it's obligatory. We fill our silver table with data, which passed all these checks.
 
 Voilà !
+
+# Detailed walkthrough
+
+![Pipeline_view](/screenshots/pipeline.png)
+
+## Loading files
+It's pretty straitforward here - we get etags from alrady present json data, compare it with version on PDB file server, and download it if necessery.
+
+![version_check](/screenshots/version_check.png)
+
+## Write to json
+Now we parse cif files to json, write them as is with etag version. Then for each category we are interested in we write json file for each experiment. Also, we thim underscore in the beginning of category name and remove attributes that are not in our target schema.
+
+![write_as_json](/screenshots/write_as_json.png)
+
+## Insert into bronze layer
+For this stage we have uniform notebook, category to be processed is configured by task parameters in workflows and schema file.
+
+Here is how data looks at this point: array of values in each column.
+
+![raw_data_sample](/screenshots/raw_data_sample.png)
+
+We create pandas dataframe from this json, it will parse these arrays. 
+Sometimes we encounter Key-value categories, and in json in each column we have single value instead of array, in that case we specify index when creating pandas df.
+Then we replace all '?' with nulls.
+Then we move to spark dataframe, and add null columns for each category attribute that is not present.
+We union all experiments into single dataframe, delete all data about these experiments from corresponding bronze table, and insert new data.
+
+![bronze_layer_sample](/screenshots/bronze_layer_sample.png)
+
+## Silver layer
+We have put data in structured representation, now we can make type checks, allowed values checks, not null checks.
+
+
